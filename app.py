@@ -32,47 +32,45 @@ def parse_french_date(date_str):
 def extract_data(text):
     data = {}
 
-    # 🔹 normaliser
     text_clean = text.replace("\n", " ")
 
     # 🔹 DATE
-    date_match = re.search(r"(\d{1,2}\s+[a-zéû]+\.?\s+\d{4})", text_clean, re.IGNORECASE)
-    raw_date = date_match.group(1) if date_match else ""
+    date_match = re.search(r"\d{1,2}\s+[a-zéû]+\.?\s+\d{4}", text_clean, re.IGNORECASE)
+    raw_date = date_match.group(0) if date_match else ""
     data["Date"] = raw_date
     data["Date_obj"] = parse_french_date(raw_date)
 
-    # 🔹 NOM (2 stratégies)
-    name_match = re.search(r"À l'attention de\.?\s*([A-Z\- ]+)", text_clean)
-
-    if name_match:
-        nom = name_match.group(1).strip()
-    else:
-        # sinon prendre le nom en haut (ligne après "Facture")
-        lines = text.split("\n")
-        nom = ""
-        for i, line in enumerate(lines):
-            if "Facture" in line and i + 1 < len(lines):
-                nom = lines[i + 1].strip()
-                break
-
-    data["Nom"] = nom
-
     # 🔹 NUMÉRO
-    num_match = re.search(r"Numéro de facture\s*[:\-]?\s*(\d+)", text_clean)
+    num_match = re.search(r"facture\s*(\d+)", text_clean, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # 🔹 HT + TVA
-    tva_block = re.search(r"TVA.*?([\d,]+)\s*€.*?([\d,]+)\s*€", text_clean)
-    if tva_block:
-        data["HT"] = float(tva_block.group(1).replace(",", "."))
-        data["TVA"] = float(tva_block.group(2).replace(",", "."))
+    # 🔹 MONTANTS (on prend les 3 derniers montants du document)
+    montants = re.findall(r"(\d+[.,]\d{2})\s*€", text_clean)
+
+    if len(montants) >= 3:
+        data["HT"] = float(montants[-3].replace(",", "."))
+        data["TVA"] = float(montants[-2].replace(",", "."))
+        data["TTC"] = float(montants[-1].replace(",", "."))
     else:
         data["HT"] = 0
         data["TVA"] = 0
+        data["TTC"] = 0
 
-    # 🔹 TTC
-    total_match = re.search(r"Montant total\s*([\d,]+)", text_clean)
-    data["TTC"] = float(total_match.group(1).replace(",", ".")) if total_match else 0
+    # 🔹 NOM (on prend la première ligne "propre")
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+
+    nom = ""
+    for line in lines:
+        if (
+            line.isupper()
+            and "FACTURE" not in line
+            and "FRANCE" not in line
+            and len(line) > 5
+        ):
+            nom = line
+            break
+
+    data["Nom"] = nom
 
     # 🔹 FOURNISSEUR
     if "laboutiquehydro" in text.lower():
