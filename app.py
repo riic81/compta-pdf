@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-st.title("📄 → 📊 Compta automatique (version fiable)")
+st.title("📄 → 📊 Compta automatique")
 
 uploaded_files = st.file_uploader(
     "Importer vos factures PDF",
@@ -40,29 +40,32 @@ def extract_text_from_pdf(file):
 def extract_data(text):
     data = {}
 
+    text_clean = text.replace("\n", " ")
+
     # DATE
-    date_match = re.search(r"\d{1,2}\s+[a-zéû]+\.?\s+\d{4}", text, re.IGNORECASE)
+    date_match = re.search(r"\d{1,2}\s+[a-zéû]+\.?\s+\d{4}", text_clean, re.IGNORECASE)
     raw_date = date_match.group(0) if date_match else ""
     data["Date"] = raw_date
     data["Date_obj"] = parse_french_date(raw_date)
 
     # NUMERO
-    num_match = re.search(r"Numéro de facture\s*(\d+)", text)
+    num_match = re.search(r"Numéro de facture\s*(\d+)", text_clean)
     if not num_match:
-        num_match = re.search(r"facture\s*(\d+)", text, re.IGNORECASE)
+        num_match = re.search(r"facture\s*(\d+)", text_clean, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-# 🔹 HT + TVA
-tva_block = re.search(r"TVA.*?(\d+[.,]\d{2})\s*€.*?(\d+[.,]\d{2})\s*€", text, re.DOTALL)
+    # HT + TVA
+    tva_block = re.search(r"TVA.*?(\d+[.,]\d{2})\s*€.*?(\d+[.,]\d{2})\s*€", text_clean)
 
-if tva_block:
-    data["HT"] = float(tva_block.group(1).replace(",", "."))
-    data["TVA"] = float(tva_block.group(2).replace(",", "."))
-else:
-    data["HT"] = 0
-    data["TVA"] = 0
+    if tva_block:
+        data["HT"] = float(tva_block.group(1).replace(",", "."))
+        data["TVA"] = float(tva_block.group(2).replace(",", "."))
+    else:
+        data["HT"] = 0
+        data["TVA"] = 0
+
     # TTC
-    total_match = re.search(r"Montant total\s*(\d+[.,]\d{2})", text)
+    total_match = re.search(r"Montant total\s*(\d+[.,]\d{2})", text_clean)
     data["TTC"] = float(total_match.group(1).replace(",", ".")) if total_match else 0
 
     # NOM
@@ -86,6 +89,8 @@ else:
         fournisseur = "Inconnu"
 
     data["Fournisseur"] = fournisseur
+
+    # TYPE
     data["Type"] = "Vente" if fournisseur == "LA BOUTIQUE HYDRO" else "Achat"
 
     return data
@@ -101,17 +106,20 @@ if uploaded_files:
 
         df = pd.DataFrame(results)
 
+        # Nettoyage dates
         df["Date_obj"] = pd.to_datetime(df["Date_obj"], errors="coerce")
         df = df[df["Date_obj"].notna()]
         df = df.sort_values("Date_obj")
 
-# ✅ format date propre (sans heure)
-df["Date"] = df["Date_obj"].dt.strftime("%Y-%m-%d")
+        # Format date propre
+        df["Date"] = df["Date_obj"].dt.strftime("%Y-%m-%d")
 
-# ✅ supprimer colonnes inutiles
-df = df.drop(columns=["Date_obj"], errors="ignore")
+        # Supprimer colonne technique
+        df = df.drop(columns=["Date_obj"], errors="ignore")
+
         st.dataframe(df)
 
+        # Export Excel
         with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="Journal", index=False)
 
