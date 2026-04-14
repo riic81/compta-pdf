@@ -52,13 +52,15 @@ def extract_data(text):
         num_match = re.search(r"facture\s*(\d+)", text, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # TVA / HT
-    tva_line = re.search(r"TVA.*", text)
-    if tva_line:
-        numbers = re.findall(r"\d+[.,]\d{2}", tva_line.group(0))
-        if len(numbers) >= 2:
-            data["HT"] = float(numbers[0].replace(",", "."))
-            data["TVA"] = float(numbers[1].replace(",", "."))
+   # 🔹 HT + TVA (ligne TVA fiable)
+tva_block = re.search(r"TVA.*?(\d+[.,]\d{2})\s*€.*?(\d+[.,]\d{2})\s*€", text, re.DOTALL)
+
+if tva_block:
+    data["HT"] = float(tva_block.group(1).replace(",", "."))
+    data["TVA"] = float(tva_block.group(2).replace(",", "."))
+else:
+    data["HT"] = 0
+    data["TVA"] = 0
         else:
             data["HT"] = 0
             data["TVA"] = 0
@@ -109,8 +111,12 @@ if uploaded_files:
         df["Date_obj"] = pd.to_datetime(df["Date_obj"], errors="coerce")
         df = df[df["Date_obj"].notna()]
         df = df.sort_values("Date_obj")
-        df["Mois"] = df["Date_obj"].dt.strftime("%Y-%m")
 
+# ✅ format date propre (sans heure)
+df["Date"] = df["Date_obj"].dt.strftime("%Y-%m-%d")
+
+# ✅ supprimer colonnes inutiles
+df = df.drop(columns=["Date_obj"], errors="ignore")
         st.dataframe(df)
 
         with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
