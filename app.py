@@ -61,13 +61,13 @@ if uploaded_files:
                 for page in pdf.pages:
                     text += page.extract_text() + "\n"
                 results.append(extract_data(text))
-df["Date_obj"] = pd.to_datetime(df["Date_obj"], errors="coerce")
+        df["Date_obj"] = pd.to_datetime(df["Date_obj"], errors="coerce")
 
         df = pd.DataFrame(results)
         df = df[df["Date_obj"].notna()]
         df = df.sort_values("Date_obj")
         df["Date_obj"] = pd.to_datetime(df["Date_obj"], errors="coerce")
-df["Mois"] = df["Date_obj"].dt.strftime("%Y-%m")
+        df["Mois"] = df["Date_obj"].dt.strftime("%Y-%m")
 
         st.dataframe(df)
 
