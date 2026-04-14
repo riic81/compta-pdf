@@ -1,11 +1,13 @@
 import pdfplumber
 import re
 import pandas as pd
+import streamlit as st
 from datetime import datetime
-import tkinter as tk
-from tkinter import filedialog, messagebox
 
-# -------- OUTILS --------
+st.title("📄 → 📊 Compta automatique")
+
+uploaded_files = st.file_uploader("Importer vos factures PDF", type="pdf", accept_multiple_files=True)
+
 def parse_french_date(date_str):
     mois_map = {
         "janv.": "01", "févr.": "02", "mars": "03", "avr.": "04",
@@ -17,7 +19,6 @@ def parse_french_date(date_str):
         return datetime.strptime(f"{parts[0]}/{mois_map.get(parts[1],'01')}/{parts[2]}", "%d/%m/%Y")
     except:
         return None
-
 
 def extract_data(text):
     data = {}
@@ -50,71 +51,26 @@ def extract_data(text):
 
     return data
 
-# -------- APP --------
-files = []
+if uploaded_files:
+    if st.button("🚀 Générer"):
+        results = []
 
-def select_files():
-    global files
-    files = filedialog.askopenfilenames(filetypes=[("PDF files", "*.pdf")])
-    label.config(text=f"{len(files)} fichier(s) sélectionné(s)")
+        for file in uploaded_files:
+            with pdfplumber.open(file) as pdf:
+                text = ""
+                for page in pdf.pages:
+                    text += page.extract_text() + "\n"
+                results.append(extract_data(text))
 
+        df = pd.DataFrame(results)
+        df = df[df["Date_obj"].notna()]
+        df = df.sort_values("Date_obj")
+        df["Mois"] = df["Date_obj"].dt.strftime("%Y-%m")
 
-def generate_excel():
-    if not files:
-        messagebox.showerror("Erreur", "Aucun fichier sélectionné")
-        return
+        st.dataframe(df)
 
-    results = []
+        with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
+            df.to_excel(writer, sheet_name="Journal", index=False)
 
-    for file in files:
-        with pdfplumber.open(file) as pdf:
-            text = ""
-            for page in pdf.pages:
-                text += page.extract_text() + "\n"
-            results.append(extract_data(text))
-
-    df = pd.DataFrame(results)
-    df = df[df["Date_obj"].notna()]
-    df = df.sort_values("Date_obj")
-    df["Mois"] = df["Date_obj"].dt.strftime("%Y-%m")
-
-    save_path = filedialog.asksaveasfilename(defaultextension=".xlsx")
-
-    with pd.ExcelWriter(save_path, engine="openpyxl") as writer:
-        df.to_excel(writer, sheet_name="Journal", index=False)
-
-        for mois, group in df.groupby("Mois"):
-            ventes = group[group["Type"] == "Vente"]
-            achats = group[group["Type"] == "Achat"]
-
-            bilan = pd.DataFrame({
-                "Indicateur": ["TVA collectée", "TVA déductible", "TVA à payer"],
-                "Montant": [ventes["TVA"].sum(), achats["TVA"].sum(), ventes["TVA"].sum() - achats["TVA"].sum()]
-            })
-
-            ventes.to_excel(writer, sheet_name=f"{mois}_ventes", index=False)
-            achats.to_excel(writer, sheet_name=f"{mois}_achats", index=False)
-            bilan.to_excel(writer, sheet_name=f"{mois}_TVA", index=False)
-
-    messagebox.showinfo("Succès", "Fichier Excel généré !")
-
-
-# -------- UI --------
-root = tk.Tk()
-root.title("Compta PDF simple")
-root.geometry("400x200")
-
-btn_select = tk.Button(root, text="📂 Choisir les factures PDF", command=select_files)
-btn_select.pack(pady=10)
-
-label = tk.Label(root, text="Aucun fichier sélectionné")
-label.pack()
-
-btn_generate = tk.Button(root, text="🚀 Générer le fichier Excel", command=generate_excel)
-btn_generate.pack(pady=20)
-
-root.mainloop()
-
-# -------- INSTRUCTIONS --------
-# pip install pdfplumber pandas openpyxl
-# pyinstaller --onefile --noconsole app.py
+        with open("compta.xlsx", "rb") as f:
+            st.download_button("📥 Télécharger Excel", f, "compta.xlsx")
