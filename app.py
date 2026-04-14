@@ -32,25 +32,37 @@ def parse_french_date(date_str):
 def extract_data(text):
     data = {}
 
-    # 🔹 NORMALISER TEXTE
-    text = text.replace("\n", " ")
+    # 🔹 normaliser
+    text_clean = text.replace("\n", " ")
 
-    # 🔹 DATE (plus flexible)
-    date_match = re.search(r"(\d{1,2}\s+[a-zéû]+\.?\s+\d{4})", text, re.IGNORECASE)
+    # 🔹 DATE
+    date_match = re.search(r"(\d{1,2}\s+[a-zéû]+\.?\s+\d{4})", text_clean, re.IGNORECASE)
     raw_date = date_match.group(1) if date_match else ""
     data["Date"] = raw_date
     data["Date_obj"] = parse_french_date(raw_date)
 
-    # 🔹 NOM (tolérant)
-    name_match = re.search(r"À l'attention de\.?\s*([A-Z\- ]+)", text)
-    data["Nom"] = name_match.group(1).strip() if name_match else ""
+    # 🔹 NOM (2 stratégies)
+    name_match = re.search(r"À l'attention de\.?\s*([A-Z\- ]+)", text_clean)
 
-    # 🔹 NUMÉRO (tolérant)
-    num_match = re.search(r"Numéro de facture\s*[:\-]?\s*(\d+)", text)
+    if name_match:
+        nom = name_match.group(1).strip()
+    else:
+        # sinon prendre le nom en haut (ligne après "Facture")
+        lines = text.split("\n")
+        nom = ""
+        for i, line in enumerate(lines):
+            if "Facture" in line and i + 1 < len(lines):
+                nom = lines[i + 1].strip()
+                break
+
+    data["Nom"] = nom
+
+    # 🔹 NUMÉRO
+    num_match = re.search(r"Numéro de facture\s*[:\-]?\s*(\d+)", text_clean)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # 🔹 HT + TVA (plus robuste)
-    tva_block = re.search(r"TVA.*?([\d,]+)\s*€.*?([\d,]+)\s*€", text)
+    # 🔹 HT + TVA
+    tva_block = re.search(r"TVA.*?([\d,]+)\s*€.*?([\d,]+)\s*€", text_clean)
     if tva_block:
         data["HT"] = float(tva_block.group(1).replace(",", "."))
         data["TVA"] = float(tva_block.group(2).replace(",", "."))
@@ -59,21 +71,19 @@ def extract_data(text):
         data["TVA"] = 0
 
     # 🔹 TTC
-    total_match = re.search(r"Montant total\s*([\d,]+)", text)
+    total_match = re.search(r"Montant total\s*([\d,]+)", text_clean)
     data["TTC"] = float(total_match.group(1).replace(",", ".")) if total_match else 0
 
-    # 🔹 FOURNISSEUR (tolérant)
-    if "LA BOUTIQUE HYDRO" in text:
+    # 🔹 FOURNISSEUR
+    if "laboutiquehydro" in text.lower():
         fournisseur = "LA BOUTIQUE HYDRO"
     else:
-        # essayer de récupérer une ligne en majuscule
-        match = re.search(r"([A-Z ]{6,})", text)
-        fournisseur = match.group(1).strip() if match else "Inconnu"
+        fournisseur = "Inconnu"
 
     data["Fournisseur"] = fournisseur
 
     # 🔹 TYPE
-    data["Type"] = "Vente" if "LA BOUTIQUE HYDRO" in fournisseur else "Achat"
+    data["Type"] = "Vente" if fournisseur == "LA BOUTIQUE HYDRO" else "Achat"
 
     return data
 # -------- TRAITEMENT --------
