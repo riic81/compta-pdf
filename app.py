@@ -32,30 +32,41 @@ def parse_french_date(date_str):
 def extract_data(text):
     data = {}
 
-    date_match = re.search(r"Date\s*\n\s*(.+)", text)
+    # DEBUG → affiche le texte (utile pour voir si ça marche)
+    st.text(text[:1000])
+
+    # Date
+    date_match = re.search(r"Date.*?\n\s*(.+)", text, re.DOTALL)
     raw_date = date_match.group(1).strip() if date_match else ""
     data["Date"] = raw_date
     data["Date_obj"] = parse_french_date(raw_date)
 
-    name_match = re.search(r"À l'attention de\.\s*(.+)", text)
+    # Nom
+    name_match = re.search(r"À l'attention de\.?\s*(.+)", text)
     data["Nom"] = name_match.group(1).strip() if name_match else ""
 
+    # Numéro
     num_match = re.search(r"Numéro de facture\s*\n\s*(\d+)", text)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
+    # HT
     ht_match = re.search(r"TVA de\s*([\d,]+)", text)
     data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
+    # TVA
     tva_match = re.search(r"TVA de\s*[\d,]+\s*€\s*([\d,]+)", text)
     data["TVA"] = float(tva_match.group(1).replace(",", ".")) if tva_match else 0
 
+    # TTC
     total_match = re.search(r"Montant total\s*([\d,]+)", text)
     data["TTC"] = float(total_match.group(1).replace(",", ".")) if total_match else 0
 
-    fournisseur_match = re.search(r"\n([A-Z ]{5,})\nIBAN", text)
+    # Fournisseur
+    fournisseur_match = re.search(r"([A-Z ]{5,})\nIBAN", text)
     fournisseur = fournisseur_match.group(1).strip() if fournisseur_match else ""
     data["Fournisseur"] = fournisseur
 
+    # Type
     data["Type"] = "Vente" if "LA BOUTIQUE HYDRO" in fournisseur else "Achat"
 
     return data
@@ -69,7 +80,10 @@ if uploaded_files:
             with pdfplumber.open(file) as pdf:
                 text = ""
                 for page in pdf.pages:
-                    text += page.extract_text() + "\n"
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+
                 results.append(extract_data(text))
 
         df = pd.DataFrame(results)
