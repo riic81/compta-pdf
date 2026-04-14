@@ -52,7 +52,7 @@ def extract_data(text):
         num_match = re.search(r"facture\s*(\d+)", text, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-   # 🔹 HT + TVA (ligne TVA fiable)
+# 🔹 HT + TVA
 tva_block = re.search(r"TVA.*?(\d+[.,]\d{2})\s*€.*?(\d+[.,]\d{2})\s*€", text, re.DOTALL)
 
 if tva_block:
@@ -61,13 +61,6 @@ if tva_block:
 else:
     data["HT"] = 0
     data["TVA"] = 0
-        else:
-            data["HT"] = 0
-            data["TVA"] = 0
-    else:
-        data["HT"] = 0
-        data["TVA"] = 0
-
     # TTC
     total_match = re.search(r"Montant total\s*(\d+[.,]\d{2})", text)
     data["TTC"] = float(total_match.group(1).replace(",", ".")) if total_match else 0
