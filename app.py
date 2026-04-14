@@ -32,47 +32,56 @@ def parse_french_date(date_str):
 def extract_data(text):
     data = {}
 
-    text_clean = text.replace("\n", " ")
-
-    # 🔹 DATE
-    date_match = re.search(r"\d{1,2}\s+[a-zéû]+\.?\s+\d{4}", text_clean, re.IGNORECASE)
+    # -------- DATE --------
+    date_match = re.search(r"\d{1,2}\s+[a-zéû]+\.?\s+\d{4}", text, re.IGNORECASE)
     raw_date = date_match.group(0) if date_match else ""
     data["Date"] = raw_date
     data["Date_obj"] = parse_french_date(raw_date)
 
-    # 🔹 NUMÉRO
-    num_match = re.search(r"facture\s*(\d+)", text_clean, re.IGNORECASE)
+    # -------- NUMERO --------
+    num_match = re.search(r"Numéro de facture\s*(\d+)", text)
+    if not num_match:
+        num_match = re.search(r"facture\s*(\d+)", text, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # 🔹 MONTANTS (on prend les 3 derniers montants du document)
-    montants = re.findall(r"(\d+[.,]\d{2})\s*€", text_clean)
+    # -------- MONTANTS --------
+    # chercher ligne TVA
+    tva_line = re.search(r"TVA.*", text)
 
-    if len(montants) >= 3:
-        data["HT"] = float(montants[-3].replace(",", "."))
-        data["TVA"] = float(montants[-2].replace(",", "."))
-        data["TTC"] = float(montants[-1].replace(",", "."))
+    if tva_line:
+        numbers = re.findall(r"\d+[.,]\d{2}", tva_line.group(0))
+        if len(numbers) >= 2:
+            data["HT"] = float(numbers[0].replace(",", "."))
+            data["TVA"] = float(numbers[1].replace(",", "."))
+        else:
+            data["HT"] = 0
+            data["TVA"] = 0
     else:
         data["HT"] = 0
         data["TVA"] = 0
-        data["TTC"] = 0
 
-    # 🔹 NOM (on prend la première ligne "propre")
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    # TTC
+    total_match = re.search(r"Montant total\s*(\d+[.,]\d{2})", text)
+    data["TTC"] = float(total_match.group(1).replace(",", ".")) if total_match else 0
+
+    # -------- NOM (zone haut du document) --------
+    lines = text.split("\n")
 
     nom = ""
-    for line in lines:
-        if (
-            line.isupper()
-            and "FACTURE" not in line
-            and "FRANCE" not in line
-            and len(line) > 5
-        ):
-            nom = line
+    for i in range(len(lines)):
+        if "Facture" in lines[i]:
+            # regarder les lignes suivantes
+            for j in range(i+1, i+5):
+                if j < len(lines):
+                    line = lines[j].strip()
+                    if len(line) > 3 and "France" not in line:
+                        nom = line
+                        break
             break
 
     data["Nom"] = nom
 
-    # 🔹 FOURNISSEUR
+    # -------- FOURNISSEUR --------
     if "laboutiquehydro" in text.lower():
         fournisseur = "LA BOUTIQUE HYDRO"
     else:
@@ -80,7 +89,7 @@ def extract_data(text):
 
     data["Fournisseur"] = fournisseur
 
-    # 🔹 TYPE
+    # -------- TYPE --------
     data["Type"] = "Vente" if fournisseur == "LA BOUTIQUE HYDRO" else "Achat"
 
     return data
