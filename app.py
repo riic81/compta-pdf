@@ -34,7 +34,7 @@ def extract_data(text):
     num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # -------- FOURNISSEUR --------
+    # -------- DETECTION --------
     is_kramp = "kramp" in text.lower()
 
     # ==============================
@@ -54,18 +54,16 @@ def extract_data(text):
     # ==============================
     else:
 
-        # récupérer TOUS les montants
-        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
+        tva_block = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})\s*€\s*([0-9]+[.,][0-9]{2})", text_clean)
+        ttc_match = re.search(r"Montant total\s*([0-9]+[.,][0-9]{2})", text_clean)
 
-        # prendre les 3 plus grands (souvent HT TVA TTC)
-        montants_float = sorted([float(m.replace(",", ".")) for m in montants], reverse=True)
-
-        if len(montants_float) >= 3:
-            TTC = montants_float[0]
-            TVA = montants_float[1]
-            HT = montants_float[2]
+        if tva_block:
+            HT = float(tva_block.group(1).replace(",", "."))
+            TVA = float(tva_block.group(2).replace(",", "."))
         else:
-            HT = TVA = TTC = 0
+            HT = TVA = 0
+
+        TTC = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
 
     data["HT"] = HT
     data["TVA"] = TVA
@@ -81,7 +79,7 @@ def extract_data(text):
                 break
     data["Nom"] = nom
 
-    # -------- FOURNISSEUR FINAL --------
+    # -------- FOURNISSEUR --------
     if is_kramp:
         fournisseur = "KRAMP"
     elif "laboutiquehydro" in text.lower():
