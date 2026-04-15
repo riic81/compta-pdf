@@ -88,29 +88,23 @@ def extract_data(text):
     else:
         TTC = 0
 
-    # -------- MODE DE PAIEMENT (multi-pages OK) --------
-    paiement = ""
+    # -------- MODE DE PAIEMENT (normalisé) --------
+paiement = ""
 
-    for i in range(len(lines)):
-        if "Mode de paiement" in lines[i]:
-            if i + 1 < len(lines):
-                paiement = lines[i + 1].strip()
+for i in range(len(lines)):
+    if "Mode de paiement" in lines[i]:
+        if i + 1 < len(lines):
+            paiement = lines[i + 1].strip().lower()
 
-    if not paiement:
-        paiement = "Inconnu"
-
-    return {
-        "Client": client,
-        "Référence (numéro)": numero,
-        "Date de paiement": date,
-        "Moyen de paiement": paiement,
-        "Montant HT": HT,
-        "Taux de TVA": 20,
-        "Montant TTC": TTC,
-        "Type de vente (1,2,3,4)": 2
-    }
-
-
+# NORMALISATION
+if "carte" in paiement:
+    paiement = "Carte bleue"
+elif "paypal" in paiement:
+    paiement = "Paypal"
+elif "virement" in paiement:
+    paiement = "Virement anticipé"
+else:
+    paiement = "Virement anticipé"  # défaut
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer CSV ABBYY"):
