@@ -11,7 +11,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# -------- TEXTE PDF --------
+# -------- EXTRACTION TEXTE --------
 def extract_text_from_pdf(file):
     text = ""
     pdf = fitz.open(stream=file.read(), filetype="pdf")
@@ -20,7 +20,7 @@ def extract_text_from_pdf(file):
     return text
 
 
-# -------- EXTRACTION --------
+# -------- EXTRACTION DONNÉES --------
 def extract_data(text):
 
     data = {}
@@ -39,31 +39,31 @@ def extract_data(text):
         num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # -------- DETECTION TYPE --------
+    # -------- DETECTION FOURNISSEUR --------
     is_kramp = "kramp" in text.lower()
 
     # ==============================
-    # 🔵 CAS KRAMP (version robuste)
+    # 🔵 CAS KRAMP (ROBUSTE)
     # ==============================
     if is_kramp:
+        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-    # tous les montants du document
-    montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
+        if len(montants) >= 2:
+            ht = float(montants[-3].replace(",", ".")) if len(montants) >= 3 else float(montants[0].replace(",", "."))
+            ttc = float(montants[-1].replace(",", "."))
 
-    if len(montants) >= 2:
-        data["HT"] = float(montants[-3].replace(",", ".")) if len(montants) >= 3 else float(montants[0].replace(",", "."))
-        data["TTC"] = float(montants[-1].replace(",", "."))
-        data["TVA"] = round(data["TTC"] - data["HT"], 2)
-    else:
-        data["HT"] = 0
-        data["TVA"] = 0
-        data["TTC"] = 0
+            data["HT"] = ht
+            data["TTC"] = ttc
+            data["TVA"] = round(ttc - ht, 2)
+        else:
+            data["HT"] = 0
+            data["TVA"] = 0
+            data["TTC"] = 0
+
     # ==============================
     # 🟢 AUTRES FACTURES (HYDRO)
     # ==============================
     else:
-
-        # récupérer tous les montants
         montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
         if len(montants) >= 3:
@@ -87,7 +87,7 @@ def extract_data(text):
 
     if not nom:
         for line in lines:
-            if len(line.strip()) > 5 and line.strip().isupper():
+            if line.strip().isupper() and len(line.strip()) > 5:
                 nom = line.strip()
                 break
 
