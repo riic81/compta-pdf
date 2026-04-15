@@ -11,7 +11,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# -------- EXTRACTION TEXTE --------
+# -------- TEXTE PDF --------
 def extract_text_from_pdf(file):
     text = ""
     pdf = fitz.open(stream=file.read(), filetype="pdf")
@@ -20,11 +20,10 @@ def extract_text_from_pdf(file):
     return text
 
 
-# -------- EXTRACTION DONNÉES --------
+# -------- EXTRACTION --------
 def extract_data(text):
 
     data = {}
-
     text_clean = text.replace("\n", " ")
 
     # -------- DATE --------
@@ -36,40 +35,66 @@ def extract_data(text):
 
     # -------- NUMERO --------
     num_match = re.search(r"No\. Facture\s*([0-9]+)", text_clean)
+    if not num_match:
+        num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # -------- HT --------
-    ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
-    if ht_match:
-        data["HT"] = float(ht_match.group(1).replace(",", "."))
-    else:
-        data["HT"] = 0
+    # -------- DETECTION TYPE --------
+    is_kramp = "kramp" in text.lower()
 
-    # -------- TTC --------
-    ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
-    if ttc_match:
-        data["TTC"] = float(ttc_match.group(1).replace(",", "."))
-    else:
-        data["TTC"] = 0
+    # ==============================
+    # 🔵 CAS KRAMP
+    # ==============================
+    if is_kramp:
 
-    # -------- TVA (calcul fiable) --------
-    if data["HT"] and data["TTC"]:
-        data["TVA"] = round(data["TTC"] - data["HT"], 2)
+        # HT
+        ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
+        data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
+
+        # TTC
+        ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
+        data["TTC"] = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
+
+        # TVA (calcul fiable)
+        data["TVA"] = round(data["TTC"] - data["HT"], 2) if data["TTC"] else 0
+
+    # ==============================
+    # 🟢 AUTRES FACTURES (HYDRO)
+    # ==============================
     else:
-        data["TVA"] = 0
+
+        # récupérer tous les montants
+        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
+
+        if len(montants) >= 3:
+            data["HT"] = float(montants[-3].replace(",", "."))
+            data["TVA"] = float(montants[-2].replace(",", "."))
+            data["TTC"] = float(montants[-1].replace(",", "."))
+        else:
+            data["HT"] = 0
+            data["TVA"] = 0
+            data["TTC"] = 0
 
     # -------- NOM --------
     lines = text.split("\n")
     nom = ""
+
     for i in range(len(lines)):
         if "Client" in lines[i]:
             if i + 1 < len(lines):
                 nom = lines[i + 1].strip()
                 break
+
+    if not nom:
+        for line in lines:
+            if len(line.strip()) > 5 and line.strip().isupper():
+                nom = line.strip()
+                break
+
     data["Nom"] = nom
 
     # -------- FOURNISSEUR --------
-    if "kramp" in text.lower():
+    if is_kramp:
         fournisseur = "KRAMP"
     elif "laboutiquehydro" in text.lower():
         fournisseur = "LA BOUTIQUE HYDRO"
@@ -90,14 +115,12 @@ if uploaded_files:
 
         for file in uploaded_files:
             text = extract_text_from_pdf(file)
-            data = extract_data(text)
-            results.append(data)
+            results.append(extract_data(text))
 
         df = pd.DataFrame(results)
 
         st.dataframe(df)
 
-        # -------- EXPORT --------
         with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="Journal", index=False)
 
