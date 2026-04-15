@@ -43,21 +43,21 @@ def extract_data(text):
     is_kramp = "kramp" in text.lower()
 
     # ==============================
-    # 🔵 CAS KRAMP
+    # 🔵 CAS KRAMP (version robuste)
     # ==============================
     if is_kramp:
 
-        # HT
-        ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
-        data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
+    # tous les montants du document
+    montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-        # TTC
-        ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
-        data["TTC"] = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
-
-        # TVA (calcul fiable)
-        data["TVA"] = round(data["TTC"] - data["HT"], 2) if data["TTC"] else 0
-
+    if len(montants) >= 2:
+        data["HT"] = float(montants[-3].replace(",", ".")) if len(montants) >= 3 else float(montants[0].replace(",", "."))
+        data["TTC"] = float(montants[-1].replace(",", "."))
+        data["TVA"] = round(data["TTC"] - data["HT"], 2)
+    else:
+        data["HT"] = 0
+        data["TVA"] = 0
+        data["TTC"] = 0
     # ==============================
     # 🟢 AUTRES FACTURES (HYDRO)
     # ==============================
