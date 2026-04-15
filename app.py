@@ -25,7 +25,7 @@ def extract_data(text):
 
     text_clean = text.replace("\n", " ")
 
-    # -------- CLIENT (FIABLE) --------
+    # -------- CLIENT --------
     lines = text.split("\n")
     client = ""
 
@@ -64,8 +64,8 @@ def extract_data(text):
     else:
         date = ""
 
-    # -------- HT (RÈGLE MÉTIER) --------
-    ht_match = re.search(r"20%\s*de\s*TVA\s*de\s*([0-9]+[.,][0-9]{2})", text_clean)
+    # -------- HT (corrigé) --------
+    ht_match = re.search(r"20\s*%?\s*TVA\s*de\s*([0-9]+[.,][0-9]{2})", text_clean)
 
     if ht_match:
         HT = float(ht_match.group(1).replace(",", "."))
@@ -73,7 +73,7 @@ def extract_data(text):
         HT = 0
 
     # -------- TVA --------
-    tva_match = re.search(r"20%.*?([0-9]+[.,][0-9]{2})\s*$", text, re.MULTILINE)
+    tva_match = re.search(r"20\s*%?\s*TVA.*?([0-9]+[.,][0-9]{2})\s*€", text_clean)
 
     if tva_match:
         TVA = float(tva_match.group(1).replace(",", "."))
@@ -88,11 +88,23 @@ def extract_data(text):
     else:
         TTC = 0
 
+    # -------- MODE DE PAIEMENT (corrigé) --------
+    paiement = ""
+
+    for i in range(len(lines)):
+        if "Mode de paiement" in lines[i]:
+            if i + 1 < len(lines):
+                paiement = lines[i + 1].strip()
+                break
+
+    if not paiement:
+        paiement = "Inconnu"
+
     return {
         "Client": client,
         "Référence (numéro)": numero,
         "Date de paiement": date,
-        "Moyen de paiement": "Virement",
+        "Moyen de paiement": paiement,
         "Montant HT": HT,
         "Taux de TVA": 20,
         "Montant TTC": TTC,
