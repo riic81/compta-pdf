@@ -28,13 +28,16 @@ def extract_data(text):
 
     # -------- DATE --------
     date_match = re.search(r"[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}", text_clean)
-    data["Date"] = pd.to_datetime(date_match.group(0), dayfirst=True).strftime("%Y-%m-%d") if date_match else ""
+    if date_match:
+        data["Date"] = pd.to_datetime(date_match.group(0), dayfirst=True).strftime("%Y-%m-%d")
+    else:
+        data["Date"] = ""
 
     # -------- NUMERO --------
     num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # -------- DETECTION --------
+    # -------- DETECTION FOURNISSEUR --------
     is_kramp = "kramp" in text.lower()
 
     # ==============================
@@ -50,28 +53,45 @@ def extract_data(text):
         TVA = round(TTC - HT, 2) if TTC else 0
 
     # ==============================
-    # 🟢 HYDRO (FIABLE)
+    # 🟢 HYDRO
     # ==============================
     else:
 
-    montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
+        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-    montants_float = sorted([float(m.replace(",", ".")) for m in montants], reverse=True)
+        montants_float = sorted(
+            [float(m.replace(",", ".")) for m in montants],
+            reverse=True
+        )
 
-    if len(montants_float) >= 3:
-        TTC = montants_float[0]
-        TVA = montants_float[1]
-        HT = montants_float[2]
-    else:
-        HT = TVA = TTC = 0
+        if len(montants_float) >= 3:
+            TTC = montants_float[0]
+            TVA = montants_float[1]
+            HT = montants_float[2]
+        else:
+            HT = TVA = TTC = 0
+
+    # -------- AFFECTATION --------
+    data["HT"] = HT
+    data["TVA"] = TVA
+    data["TTC"] = TTC
+
     # -------- NOM --------
     lines = text.split("\n")
     nom = ""
+
     for i in range(len(lines)):
         if "Client" in lines[i]:
             if i + 1 < len(lines):
                 nom = lines[i + 1].strip()
                 break
+
+    if not nom:
+        for line in lines:
+            if line.strip().isupper() and len(line.strip()) > 5:
+                nom = line.strip()
+                break
+
     data["Nom"] = nom
 
     # -------- FOURNISSEUR --------
@@ -86,6 +106,8 @@ def extract_data(text):
     data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
 
     return data
+
+
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer"):
