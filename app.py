@@ -1,10 +1,15 @@
 import fitz
+import re
 import pandas as pd
 import streamlit as st
 
-st.title("📄 → 📊 Compta simple (fiable)")
+st.title("📄 → CSV ABBYY (Factures de vente)")
 
-uploaded_file = st.file_uploader("Importer une facture PDF", type="pdf")
+uploaded_files = st.file_uploader(
+    "Importer vos factures de vente PDF",
+    type="pdf",
+    accept_multiple_files=True
+)
 
 # -------- EXTRACTION TEXTE --------
 def extract_text(file):
@@ -14,49 +19,61 @@ def extract_text(file):
         text += page.get_text()
     return text
 
-if uploaded_file:
 
-    text = extract_text(uploaded_file)
+# -------- EXTRACTION DONNÉES --------
+def extract_data(text):
 
-    st.subheader("📄 Texte extrait (copie/colle ce dont tu as besoin)")
-    st.text_area("Texte du PDF", text, height=300)
+    text_clean = text.replace("\n", " ")
 
-    st.subheader("✏️ Saisie des informations")
+    # DATE
+    date_match = re.search(r"[0-9]{1,2}\s+[a-zéû\.]+\s+[0-9]{4}", text_clean, re.IGNORECASE)
+    date = date_match.group(0) if date_match else ""
 
-    col1, col2 = st.columns(2)
+    # NUMERO
+    num_match = re.search(r"Numéro de facture\s*([0-9]+)", text_clean)
+    numero = num_match.group(1) if num_match else ""
 
-    with col1:
-        date = st.text_input("Date (YYYY-MM-DD)")
-        numero = st.text_input("Numéro facture")
-        nom = st.text_input("Nom client / fournisseur")
+    # MONTANTS (FIABLE car structure fixe)
+    montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-    with col2:
-        ht = st.number_input("Montant HT", step=0.01)
-        tva = st.number_input("TVA", step=0.01)
-        ttc = st.number_input("TTC", step=0.01)
+    if len(montants) >= 3:
+        HT = float(montants[-3].replace(",", "."))
+        TVA = float(montants[-2].replace(",", "."))
+        TTC = float(montants[-1].replace(",", "."))
+    else:
+        HT = TVA = TTC = 0
 
-    fournisseur = st.text_input("Fournisseur")
-    type_op = st.selectbox("Type", ["Achat", "Vente"])
+    return {
+        "Date": date,
+        "InvoiceNumber": numero,
+        "SupplierName": "LA BOUTIQUE HYDRO",
+        "TotalHT": HT,
+        "TaxAmount": TVA,
+        "TotalAmount": TTC
+    }
 
-    if st.button("📥 Générer Excel"):
 
-        data = [{
-            "Date": date,
-            "Numéro": numero,
-            "HT": ht,
-            "TVA": tva,
-            "TTC": ttc,
-            "Nom": nom,
-            "Fournisseur": fournisseur,
-            "Type": type_op
-        }]
+# -------- TRAITEMENT --------
+if uploaded_files:
+    if st.button("🚀 Générer CSV"):
 
-        df = pd.DataFrame(data)
+        results = []
+
+        for file in uploaded_files:
+            text = extract_text(file)
+            data = extract_data(text)
+            results.append(data)
+
+        df = pd.DataFrame(results)
 
         st.dataframe(df)
 
-        with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
-            df.to_excel(writer, index=False)
+        # EXPORT CSV ABBYY
+        csv = df.to_csv(index=False).encode("utf-8")
 
-        with open("compta.xlsx", "rb") as f:
-            st.download_button("📥 Télécharger Excel", f, "compta.xlsx")
+        st.download_button(
+            "📥 Télécharger CSV ABBYY",
+            csv,
+            "factures_abbyy.csv",
+            "text/csv"
+        )
