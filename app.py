@@ -39,9 +39,10 @@ def extract_text_from_pdf(file):
 # -------- EXTRACTION --------
 def extract_data(text):
     data = {}
+
     text_clean = text.replace("\n", " ")
 
-    # DATE
+    # -------- DATE --------
     date_match = re.search(r"[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}", text_clean)
     if date_match:
         raw_date = date_match.group(0)
@@ -49,31 +50,29 @@ def extract_data(text):
     else:
         data["Date_obj"] = None
 
-    # NUMERO
+    # -------- NUMERO --------
     num_match = re.search(r"No\. Facture\s*([0-9]+)", text_clean)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # HT
+    # -------- HT --------
     ht_match = re.search(r"Montant H\.T\.\s*([0-9,]+)", text_clean)
     data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
-    # -------- TVA (ultra fiable KRAMP) --------
-tva_match = re.search(r"TVA\s*20%\s*de\s*[0-9,]+\s*([0-9,]+)", text_clean)
+    # -------- TVA (FIX FINAL) --------
+    tva_match = re.search(r"TVA\s*20%\s*de\s*[0-9,]+\s*([0-9,]+)", text_clean)
+    if tva_match:
+        data["TVA"] = float(tva_match.group(1).replace(",", "."))
+    else:
+        data["TVA"] = 0
 
-if tva_match:
-    data["TVA"] = float(tva_match.group(1).replace(",", "."))
-else:
-    data["TVA"] = 0
+    # -------- TTC (FIX FINAL) --------
+    ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9,]+)", text_clean)
+    if ttc_match:
+        data["TTC"] = float(ttc_match.group(1).replace(",", "."))
+    else:
+        data["TTC"] = 0
 
-
-# -------- TTC (ultra fiable) --------
-ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9,]+)", text_clean)
-
-if ttc_match:
-    data["TTC"] = float(ttc_match.group(1).replace(",", "."))
-else:
-    data["TTC"] = 0
-    # NOM
+    # -------- NOM --------
     lines = text.split("\n")
     nom = ""
     for i in range(len(lines)):
@@ -81,9 +80,10 @@ else:
             if i + 1 < len(lines):
                 nom = lines[i + 1].strip()
                 break
+
     data["Nom"] = nom
 
-    # FOURNISSEUR
+    # -------- FOURNISSEUR --------
     if "kramp" in text.lower():
         fournisseur = "KRAMP"
     elif "laboutiquehydro" in text.lower():
@@ -95,7 +95,6 @@ else:
     data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
 
     return data
-
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer"):
