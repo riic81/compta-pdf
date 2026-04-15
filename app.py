@@ -20,13 +20,13 @@ def extract_text(file):
     return text
 
 
-# -------- EXTRACTION --------
+# -------- EXTRACTION DONNÉES --------
 def extract_data(text):
 
     text_clean = text.replace("\n", " ")
+    lines = text.split("\n")
 
     # -------- CLIENT --------
-    lines = text.split("\n")
     client = ""
 
     for i in range(len(lines)):
@@ -64,7 +64,7 @@ def extract_data(text):
     else:
         date = ""
 
-    # -------- HT (corrigé) --------
+    # -------- HT --------
     ht_match = re.search(r"20\s*%?\s*TVA\s*de\s*([0-9]+[.,][0-9]{2})", text_clean)
 
     if ht_match:
@@ -88,16 +88,17 @@ def extract_data(text):
     else:
         TTC = 0
 
-    # -------- MODE DE PAIEMENT (multi-pages corrigé) --------
-paiement = ""
+    # -------- MODE DE PAIEMENT (multi-pages OK) --------
+    paiement = ""
 
-for i in range(len(lines)):
-    if "Mode de paiement" in lines[i]:
-        if i + 1 < len(lines):
-            paiement = lines[i + 1].strip()
+    for i in range(len(lines)):
+        if "Mode de paiement" in lines[i]:
+            if i + 1 < len(lines):
+                paiement = lines[i + 1].strip()
 
-if not paiement:
-    paiement = "Inconnu"
+    if not paiement:
+        paiement = "Inconnu"
+
     return {
         "Client": client,
         "Référence (numéro)": numero,
@@ -108,6 +109,8 @@ if not paiement:
         "Montant TTC": TTC,
         "Type de vente (1,2,3,4)": 2
     }
+
+
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer CSV ABBYY"):
@@ -120,7 +123,7 @@ if uploaded_files:
 
         df = pd.DataFrame(results)
 
-        # ordre EXACT des colonnes
+        # ordre exact ABBYY
         df = df[
             [
                 "Client",
