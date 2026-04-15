@@ -46,7 +46,8 @@ data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 # TVA (on prend le dernier nombre de la ligne TVA)
 tva_line = re.search(r"TVA.*", text)
 if tva_line:
-    numbers = re.findall(r"\d+[.,]\d{2}", tva_line.group(0))
+    numbers = re.findall(r"[0-9,]
+[0-9]+[.,][0-9]{2}", tva_line.group(0))
     if len(numbers) >= 2:
         data["TVA"] = float(numbers[-1].replace(",", "."))
     else:
