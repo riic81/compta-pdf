@@ -50,25 +50,20 @@ def extract_data(text):
         TVA = round(TTC - HT, 2) if TTC else 0
 
     # ==============================
-    # 🟢 HYDRO
+    # 🟢 HYDRO (FIABLE)
     # ==============================
     else:
 
-        tva_block = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})\s*€\s*([0-9]+[.,][0-9]{2})", text_clean)
-        ttc_match = re.search(r"Montant total\s*([0-9]+[.,][0-9]{2})", text_clean)
+    montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-        if tva_block:
-            HT = float(tva_block.group(1).replace(",", "."))
-            TVA = float(tva_block.group(2).replace(",", "."))
-        else:
-            HT = TVA = 0
+    montants_float = sorted([float(m.replace(",", ".")) for m in montants], reverse=True)
 
-        TTC = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
-
-    data["HT"] = HT
-    data["TVA"] = TVA
-    data["TTC"] = TTC
-
+    if len(montants_float) >= 3:
+        TTC = montants_float[0]
+        TVA = montants_float[1]
+        HT = montants_float[2]
+    else:
+        HT = TVA = TTC = 0
     # -------- NOM --------
     lines = text.split("\n")
     nom = ""
