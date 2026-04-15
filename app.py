@@ -28,18 +28,13 @@ def extract_data(text):
 
     # -------- DATE --------
     date_match = re.search(r"[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}", text_clean)
-    if date_match:
-        data["Date"] = pd.to_datetime(date_match.group(0), dayfirst=True).strftime("%Y-%m-%d")
-    else:
-        data["Date"] = ""
+    data["Date"] = pd.to_datetime(date_match.group(0), dayfirst=True).strftime("%Y-%m-%d") if date_match else ""
 
     # -------- NUMERO --------
-    num_match = re.search(r"No\. Facture\s*([0-9]+)", text_clean)
-    if not num_match:
-        num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
+    num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
     data["Numéro"] = num_match.group(1) if num_match else ""
 
-    # -------- DETECTION FOURNISSEUR --------
+    # -------- FOURNISSEUR --------
     is_kramp = "kramp" in text.lower()
 
     # ==============================
@@ -50,58 +45,43 @@ def extract_data(text):
         ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
         ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
 
-        if ht_match:
-            data["HT"] = float(ht_match.group(1).replace(",", "."))
-        else:
-            data["HT"] = 0
-
-        if ttc_match:
-            data["TTC"] = float(ttc_match.group(1).replace(",", "."))
-        else:
-            data["TTC"] = 0
-
-        data["TVA"] = round(data["TTC"] - data["HT"], 2) if data["TTC"] else 0
+        HT = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
+        TTC = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
+        TVA = round(TTC - HT, 2) if TTC else 0
 
     # ==============================
-    # 🟢 AUTRES (HYDRO)
+    # 🟢 HYDRO
     # ==============================
     else:
 
-        ht_match = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})", text_clean)
-        tva_match = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})\s*€\s*([0-9]+[.,][0-9]{2})", text_clean)
-        ttc_match = re.search(r"Montant total\s*([0-9]+[.,][0-9]{2})", text_clean)
+        # récupérer TOUS les montants
+        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-        if tva_match:
-            data["HT"] = float(tva_match.group(1).replace(",", "."))
-            data["TVA"] = float(tva_match.group(2).replace(",", "."))
-        else:
-            data["HT"] = 0
-            data["TVA"] = 0
+        # prendre les 3 plus grands (souvent HT TVA TTC)
+        montants_float = sorted([float(m.replace(",", ".")) for m in montants], reverse=True)
 
-        if ttc_match:
-            data["TTC"] = float(ttc_match.group(1).replace(",", "."))
+        if len(montants_float) >= 3:
+            TTC = montants_float[0]
+            TVA = montants_float[1]
+            HT = montants_float[2]
         else:
-            data["TTC"] = 0
+            HT = TVA = TTC = 0
+
+    data["HT"] = HT
+    data["TVA"] = TVA
+    data["TTC"] = TTC
 
     # -------- NOM --------
     lines = text.split("\n")
     nom = ""
-
     for i in range(len(lines)):
         if "Client" in lines[i]:
             if i + 1 < len(lines):
                 nom = lines[i + 1].strip()
                 break
-
-    if not nom:
-        for line in lines:
-            if line.strip().isupper() and len(line.strip()) > 5:
-                nom = line.strip()
-                break
-
     data["Nom"] = nom
 
-    # -------- FOURNISSEUR --------
+    # -------- FOURNISSEUR FINAL --------
     if is_kramp:
         fournisseur = "KRAMP"
     elif "laboutiquehydro" in text.lower():
