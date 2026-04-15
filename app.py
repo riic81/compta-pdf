@@ -40,7 +40,7 @@ def extract_text_from_pdf(file):
 # -------- MONTANTS (KRAMP FIX) --------
 
 # HT
-ht_match = re.search(r"Montant H.T.\s*([\d,]+)", text)
+ht_match = re.search(r"Montant H\.T\.\s*([\d,]+)", text)
 data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
 # TVA (on prend le dernier nombre de la ligne TVA)
