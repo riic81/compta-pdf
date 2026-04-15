@@ -39,26 +39,19 @@ def extract_data(text):
     data["Numéro"] = num_match.group(1) if num_match else ""
 
     # -------- HT --------
-    ht_match = re.search(r"Montant H\.T\.\s*([0-9,]+)", text_clean)
+    ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
     data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
-    # -------- TVA --------
-    tva_line = re.search(r"TVA.*", text)
-    if tva_line:
-        numbers = re.findall(r"[0-9]+[.,][0-9]{2}", tva_line.group(0))
-        if numbers:
-            data["TVA"] = float(numbers[-1].replace(",", "."))
-        else:
-            data["TVA"] = 0
+    # -------- TVA (ligne complète fiable) --------
+    tva_match = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})\s*$", text, re.MULTILINE)
+    if tva_match:
+        data["TVA"] = float(tva_match.group(1).replace(",", "."))
     else:
         data["TVA"] = 0
 
     # -------- TTC --------
     ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
-    if ttc_match:
-        data["TTC"] = float(ttc_match.group(1).replace(",", "."))
-    else:
-        data["TTC"] = 0
+    data["TTC"] = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
 
     # -------- NOM --------
     lines = text.split("\n")
@@ -82,8 +75,6 @@ def extract_data(text):
     data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
 
     return data
-
-
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer"):
