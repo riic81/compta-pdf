@@ -102,7 +102,7 @@ def extract_data(text):
         "Montant HT": HT,
         "Taux de TVA": 20,
         "Montant TTC": TTC,
-        "Type de vente (1,2,3,4)": 2
+        "Type de vente (1,2,3,4)": 1
     }
 
 
