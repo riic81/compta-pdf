@@ -2,7 +2,6 @@ import fitz
 import re
 import pandas as pd
 import streamlit as st
-from datetime import datetime
 
 st.title("📄 → 📊 Compta automatique")
 
@@ -12,7 +11,7 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# -------- TEXTE PDF --------
+# -------- EXTRACTION TEXTE --------
 def extract_text_from_pdf(file):
     text = ""
     pdf = fitz.open(stream=file.read(), filetype="pdf")
@@ -20,8 +19,10 @@ def extract_text_from_pdf(file):
         text += page.get_text()
     return text
 
+
 # -------- EXTRACTION DONNÉES --------
 def extract_data(text):
+
     data = {}
 
     text_clean = text.replace("\n", " ")
@@ -29,10 +30,9 @@ def extract_data(text):
     # -------- DATE --------
     date_match = re.search(r"[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}", text_clean)
     if date_match:
-        raw_date = date_match.group(0)
-        data["Date_obj"] = pd.to_datetime(raw_date, dayfirst=True)
+        data["Date"] = pd.to_datetime(date_match.group(0), dayfirst=True).strftime("%Y-%m-%d")
     else:
-        data["Date_obj"] = None
+        data["Date"] = ""
 
     # -------- NUMERO --------
     num_match = re.search(r"No\. Facture\s*([0-9]+)", text_clean)
@@ -40,20 +40,24 @@ def extract_data(text):
 
     # -------- HT --------
     ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
-    data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
+    if ht_match:
+        data["HT"] = float(ht_match.group(1).replace(",", "."))
+    else:
+        data["HT"] = 0
 
     # -------- TTC --------
-ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
-if ttc_match:
-    data["TTC"] = float(ttc_match.group(1).replace(",", "."))
-else:
-    data["TTC"] = 0
+    ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
+    if ttc_match:
+        data["TTC"] = float(ttc_match.group(1).replace(",", "."))
+    else:
+        data["TTC"] = 0
 
-# -------- TVA (ULTRA FIABLE) --------
-if data["HT"] and data["TTC"]:
-    data["TVA"] = round(data["TTC"] - data["HT"], 2)
-else:
-    data["TVA"] = 0
+    # -------- TVA (calcul fiable) --------
+    if data["HT"] and data["TTC"]:
+        data["TVA"] = round(data["TTC"] - data["HT"], 2)
+    else:
+        data["TVA"] = 0
+
     # -------- NOM --------
     lines = text.split("\n")
     nom = ""
@@ -76,26 +80,24 @@ else:
     data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
 
     return data
+
+
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer"):
+
         results = []
 
         for file in uploaded_files:
             text = extract_text_from_pdf(file)
-            results.append(extract_data(text))
+            data = extract_data(text)
+            results.append(data)
 
         df = pd.DataFrame(results)
 
-        df["Date_obj"] = pd.to_datetime(df["Date_obj"], errors="coerce")
-        df = df[df["Date_obj"].notna()]
-        df = df.sort_values("Date_obj")
-
-        df["Date"] = df["Date_obj"].dt.strftime("%Y-%m-%d")
-        df = df.drop(columns=["Date_obj"], errors="ignore")
-
         st.dataframe(df)
 
+        # -------- EXPORT --------
         with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="Journal", index=False)
 
