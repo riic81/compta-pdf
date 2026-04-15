@@ -24,7 +24,7 @@ def extract_text(file):
 def extract_data(text):
 
     text_clean = text.replace("\n", " ")
-    lines = text.split("\n")
+    lines = text.split("\n")  # ⚠️ IMPORTANT (corrige ton bug)
 
     # -------- CLIENT --------
     client = ""
@@ -66,45 +66,46 @@ def extract_data(text):
 
     # -------- HT --------
     ht_match = re.search(r"20\s*%?\s*TVA\s*de\s*([0-9]+[.,][0-9]{2})", text_clean)
-
-    if ht_match:
-        HT = float(ht_match.group(1).replace(",", "."))
-    else:
-        HT = 0
+    HT = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
     # -------- TVA --------
     tva_match = re.search(r"20\s*%?\s*TVA.*?([0-9]+[.,][0-9]{2})\s*€", text_clean)
-
-    if tva_match:
-        TVA = float(tva_match.group(1).replace(",", "."))
-    else:
-        TVA = 0
+    TVA = float(tva_match.group(1).replace(",", ".")) if tva_match else 0
 
     # -------- TTC --------
     ttc_match = re.search(r"Montant total\s*([0-9]+[.,][0-9]{2})", text_clean)
+    TTC = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
 
-    if ttc_match:
-        TTC = float(ttc_match.group(1).replace(",", "."))
+    # -------- MODE DE PAIEMENT (corrigé) --------
+    paiement = ""
+
+    for i in range(len(lines)):
+        if "Mode de paiement" in lines[i]:
+            if i + 1 < len(lines):
+                paiement = lines[i + 1].strip().lower()
+
+    # NORMALISATION
+    if "carte" in paiement:
+        paiement = "Carte bleue"
+    elif "paypal" in paiement:
+        paiement = "Paypal"
+    elif "virement" in paiement:
+        paiement = "Virement anticipé"
     else:
-        TTC = 0
+        paiement = "Virement anticipé"
 
-    # -------- MODE DE PAIEMENT (normalisé) --------
-paiement = ""
+    return {
+        "Client": client,
+        "Référence (numéro)": numero,
+        "Date de paiement": date,
+        "Moyen de paiement": paiement,
+        "Montant HT": HT,
+        "Taux de TVA": 20,
+        "Montant TTC": TTC,
+        "Type de vente (1,2,3,4)": 2
+    }
 
-for i in range(len(lines)):
-    if "Mode de paiement" in lines[i]:
-        if i + 1 < len(lines):
-            paiement = lines[i + 1].strip().lower()
 
-# NORMALISATION
-if "carte" in paiement:
-    paiement = "Carte bleue"
-elif "paypal" in paiement:
-    paiement = "Paypal"
-elif "virement" in paiement:
-    paiement = "Virement anticipé"
-else:
-    paiement = "Virement anticipé"  # défaut
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer CSV ABBYY"):
@@ -117,7 +118,6 @@ if uploaded_files:
 
         df = pd.DataFrame(results)
 
-        # ordre exact ABBYY
         df = df[
             [
                 "Client",
