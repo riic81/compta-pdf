@@ -43,36 +43,44 @@ def extract_data(text):
     is_kramp = "kramp" in text.lower()
 
     # ==============================
-    # 🔵 CAS KRAMP (ROBUSTE)
+    # 🔵 KRAMP
     # ==============================
     if is_kramp:
-        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-        if len(montants) >= 2:
-            ht = float(montants[-3].replace(",", ".")) if len(montants) >= 3 else float(montants[0].replace(",", "."))
-            ttc = float(montants[-1].replace(",", "."))
+        ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
+        ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
 
-            data["HT"] = ht
-            data["TTC"] = ttc
-            data["TVA"] = round(ttc - ht, 2)
+        if ht_match:
+            data["HT"] = float(ht_match.group(1).replace(",", "."))
         else:
             data["HT"] = 0
-            data["TVA"] = 0
+
+        if ttc_match:
+            data["TTC"] = float(ttc_match.group(1).replace(",", "."))
+        else:
             data["TTC"] = 0
 
+        data["TVA"] = round(data["TTC"] - data["HT"], 2) if data["TTC"] else 0
+
     # ==============================
-    # 🟢 AUTRES FACTURES (HYDRO)
+    # 🟢 AUTRES (HYDRO)
     # ==============================
     else:
-        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
 
-        if len(montants) >= 3:
-            data["HT"] = float(montants[-3].replace(",", "."))
-            data["TVA"] = float(montants[-2].replace(",", "."))
-            data["TTC"] = float(montants[-1].replace(",", "."))
+        ht_match = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})", text_clean)
+        tva_match = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})\s*€\s*([0-9]+[.,][0-9]{2})", text_clean)
+        ttc_match = re.search(r"Montant total\s*([0-9]+[.,][0-9]{2})", text_clean)
+
+        if tva_match:
+            data["HT"] = float(tva_match.group(1).replace(",", "."))
+            data["TVA"] = float(tva_match.group(2).replace(",", "."))
         else:
             data["HT"] = 0
             data["TVA"] = 0
+
+        if ttc_match:
+            data["TTC"] = float(ttc_match.group(1).replace(",", "."))
+        else:
             data["TTC"] = 0
 
     # -------- NOM --------
@@ -105,8 +113,6 @@ def extract_data(text):
     data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
 
     return data
-
-
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer"):
