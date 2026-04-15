@@ -12,22 +12,6 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
-# -------- DATE --------
-def parse_french_date(date_str):
-    mois_map = {
-        "janv.": "01", "févr.": "02", "mars": "03", "avr.": "04",
-        "mai": "05", "juin": "06", "juil.": "07", "août": "08",
-        "sept.": "09", "oct.": "10", "nov.": "11", "déc.": "12"
-    }
-    try:
-        parts = date_str.split()
-        return datetime.strptime(
-            f"{parts[0]}/{mois_map.get(parts[1],'01')}/{parts[2]}",
-            "%d/%m/%Y"
-        )
-    except:
-        return None
-
 # -------- TEXTE PDF --------
 def extract_text_from_pdf(file):
     text = ""
@@ -36,7 +20,7 @@ def extract_text_from_pdf(file):
         text += page.get_text()
     return text
 
-# -------- EXTRACTION --------
+# -------- EXTRACTION DONNÉES --------
 def extract_data(text):
     data = {}
 
@@ -58,24 +42,24 @@ def extract_data(text):
     ht_match = re.search(r"Montant H\.T\.\s*([0-9,]+)", text_clean)
     data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
-    # -------- TVA (FIX FINAL DEFINITIF) --------
-tva_line = re.search(r"TVA.*", text)
-
-if tva_line:
-    numbers = re.findall(r"[0-9]+[.,][0-9]{2}", tva_line.group(0))
-    if len(numbers) >= 1:
-        data["TVA"] = float(numbers[-1].replace(",", "."))
+    # -------- TVA --------
+    tva_line = re.search(r"TVA.*", text)
+    if tva_line:
+        numbers = re.findall(r"[0-9]+[.,][0-9]{2}", tva_line.group(0))
+        if numbers:
+            data["TVA"] = float(numbers[-1].replace(",", "."))
+        else:
+            data["TVA"] = 0
     else:
         data["TVA"] = 0
-else:
-    data["TVA"] = 0
-    # -------- TTC --------
-ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text)
 
-if ttc_match:
-    data["TTC"] = float(ttc_match.group(1).replace(",", "."))
-else:
-    data["TTC"] = 0
+    # -------- TTC --------
+    ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
+    if ttc_match:
+        data["TTC"] = float(ttc_match.group(1).replace(",", "."))
+    else:
+        data["TTC"] = 0
+
     # -------- NOM --------
     lines = text.split("\n")
     nom = ""
@@ -84,7 +68,6 @@ else:
             if i + 1 < len(lines):
                 nom = lines[i + 1].strip()
                 break
-
     data["Nom"] = nom
 
     # -------- FOURNISSEUR --------
@@ -99,6 +82,8 @@ else:
     data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
 
     return data
+
+
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer"):
