@@ -42,17 +42,18 @@ def extract_data(text):
     ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
     data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
-    # -------- TVA (ligne complète fiable) --------
-    tva_match = re.search(r"TVA.*?([0-9]+[.,][0-9]{2})\s*$", text, re.MULTILINE)
-    if tva_match:
-        data["TVA"] = float(tva_match.group(1).replace(",", "."))
-    else:
-        data["TVA"] = 0
-
     # -------- TTC --------
-    ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
-    data["TTC"] = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
+ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
+if ttc_match:
+    data["TTC"] = float(ttc_match.group(1).replace(",", "."))
+else:
+    data["TTC"] = 0
 
+# -------- TVA (ULTRA FIABLE) --------
+if data["HT"] and data["TTC"]:
+    data["TVA"] = round(data["TTC"] - data["HT"], 2)
+else:
+    data["TVA"] = 0
     # -------- NOM --------
     lines = text.split("\n")
     nom = ""
