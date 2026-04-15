@@ -25,15 +25,16 @@ def extract_data(text):
 
     text_clean = text.replace("\n", " ")
 
-    # CLIENT (fixe)
-    client = "Jean-Marc Lasserre"
+    # -------- CLIENT (FIABLE) --------
+    client_match = re.search(r"À l'attention de\s*(.+)", text_clean)
+    client = client_match.group(1).strip() if client_match else "Client inconnu"
 
-    # NUMERO
+    # -------- NUMERO --------
     num_match = re.search(r"Numéro de facture\s*([0-9]+)", text_clean)
     numero = "F" + num_match.group(1) if num_match else ""
 
-    # DATE FACTURE → format propre
-    date_match = re.search(r"([0-9]{1,2})\s+([a-zéû\.]+)\s+([0-9]{4})", text_clean, re.IGNORECASE)
+    # -------- DATE --------
+    date_match = re.search(r"Date\s*([0-9]{1,2}\s+[a-zéû\.]+\s+[0-9]{4})", text_clean, re.IGNORECASE)
 
     mois_map = {
         "janv.": "01", "févr.": "02", "mars": "03", "avr.": "04",
@@ -42,22 +43,35 @@ def extract_data(text):
     }
 
     if date_match:
-        jour = date_match.group(1)
-        mois = mois_map.get(date_match.group(2).lower(), "01")
-        annee = date_match.group(3)
+        parts = date_match.group(1).split()
+        jour = parts[0]
+        mois = mois_map.get(parts[1].lower(), "01")
+        annee = parts[2]
         date = f"{annee}-{mois}-{jour.zfill(2)}"
     else:
         date = ""
 
-    # MONTANTS
-    montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
+    # -------- HT + TVA --------
+    tva_line = re.search(r"TVA.*", text)
 
-    if len(montants) >= 3:
-        HT = float(montants[-3].replace(",", "."))
-        TVA = float(montants[-2].replace(",", "."))
-        TTC = float(montants[-1].replace(",", "."))
+    if tva_line:
+        numbers = re.findall(r"[0-9]+[.,][0-9]{2}", tva_line.group(0))
+
+        if len(numbers) >= 2:
+            HT = float(numbers[0].replace(",", "."))
+            TVA = float(numbers[1].replace(",", "."))
+        else:
+            HT = TVA = 0
     else:
-        HT = TVA = TTC = 0
+        HT = TVA = 0
+
+    # -------- TTC --------
+    ttc_match = re.search(r"Montant total\s*([0-9]+[.,][0-9]{2})", text_clean)
+
+    if ttc_match:
+        TTC = float(ttc_match.group(1).replace(",", "."))
+    else:
+        TTC = 0
 
     return {
         "Client": client,
@@ -69,7 +83,6 @@ def extract_data(text):
         "Montant TTC": TTC,
         "Type de vente (1,2,3,4)": 2
     }
-
 # -------- TRAITEMENT --------
 if uploaded_files:
     if st.button("🚀 Générer CSV ABBYY"):
