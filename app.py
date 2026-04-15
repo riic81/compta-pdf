@@ -1,4 +1,4 @@
-import fitz  # PyMuPDF
+import fitz
 import re
 import pandas as pd
 import streamlit as st
@@ -28,7 +28,7 @@ def parse_french_date(date_str):
     except:
         return None
 
-# -------- EXTRACTION TEXTE --------
+# -------- TEXTE PDF --------
 def extract_text_from_pdf(file):
     text = ""
     pdf = fitz.open(stream=file.read(), filetype="pdf")
@@ -36,81 +36,50 @@ def extract_text_from_pdf(file):
         text += page.get_text()
     return text
 
-# -------- EXTRACTION DONNÉES --------
+# -------- EXTRACTION --------
 def extract_data(text):
     data = {}
-
     text_clean = text.replace("\n", " ")
 
-    # -------- DATE --------
+    # DATE
     date_match = re.search(r"[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}", text_clean)
     if date_match:
         raw_date = date_match.group(0)
-        try:
-            data["Date_obj"] = pd.to_datetime(raw_date, dayfirst=True)
-        except:
-            data["Date_obj"] = None
-        data["Date"] = raw_date
+        data["Date_obj"] = pd.to_datetime(raw_date, dayfirst=True)
     else:
-        date_match = re.search(r"[0-9]{1,2}\s+[a-zéû]+\.?\s+[0-9]{4}", text_clean, re.IGNORECASE)
-        raw_date = date_match.group(0) if date_match else ""
-        data["Date"] = raw_date
-        data["Date_obj"] = parse_french_date(raw_date)
+        data["Date_obj"] = None
 
-    # -------- NUMERO --------
+    # NUMERO
     num_match = re.search(r"No\. Facture\s*([0-9]+)", text_clean)
-    if not num_match:
-        num_match = re.search(r"Numéro de facture\s*([0-9]+)", text_clean)
-    if not num_match:
-        num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
-
     data["Numéro"] = num_match.group(1) if num_match else ""
-
-    # -------- MONTANTS --------
 
     # HT
     ht_match = re.search(r"Montant H\.T\.\s*([0-9,]+)", text_clean)
     data["HT"] = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
 
-    # TVA
-    tva_line = re.search(r"TVA.*", text_clean)
+    # TVA (FIX FINAL)
+    tva_line = re.search(r"TVA\s*20%.*", text_clean)
     if tva_line:
         numbers = re.findall(r"[0-9]+[.,][0-9]{2}", tva_line.group(0))
-        if len(numbers) >= 1:
-            data["TVA"] = float(numbers[-1].replace(",", "."))
-        else:
-            data["TVA"] = 0
+        data["TVA"] = float(numbers[-1].replace(",", ".")) if numbers else 0
     else:
         data["TVA"] = 0
 
-    # TTC
-    ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9,]+)", text_clean)
+    # TTC (FIX FINAL)
+    ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
     data["TTC"] = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
 
-    # -------- NOM --------
+    # NOM
     lines = text.split("\n")
     nom = ""
-
     for i in range(len(lines)):
         if "Client" in lines[i]:
             if i + 1 < len(lines):
                 nom = lines[i + 1].strip()
                 break
-
-    if not nom:
-        for i in range(len(lines)):
-            if "Facture" in lines[i]:
-                for j in range(i+1, i+5):
-                    if j < len(lines):
-                        line = lines[j].strip()
-                        if len(line) > 3 and "France" not in line:
-                            nom = line
-                            break
-                break
-
     data["Nom"] = nom
 
-    # -------- FOURNISSEUR --------
+    # FOURNISSEUR
     if "kramp" in text.lower():
         fournisseur = "KRAMP"
     elif "laboutiquehydro" in text.lower():
@@ -119,8 +88,6 @@ def extract_data(text):
         fournisseur = "Inconnu"
 
     data["Fournisseur"] = fournisseur
-
-    # -------- TYPE --------
     data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
 
     return data
@@ -140,15 +107,11 @@ if uploaded_files:
         df = df[df["Date_obj"].notna()]
         df = df.sort_values("Date_obj")
 
-        # format date propre
         df["Date"] = df["Date_obj"].dt.strftime("%Y-%m-%d")
-
-        # supprimer colonne technique
         df = df.drop(columns=["Date_obj"], errors="ignore")
 
         st.dataframe(df)
 
-        # export Excel
         with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="Journal", index=False)
 
