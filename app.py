@@ -1,129 +1,62 @@
 import fitz
-import re
 import pandas as pd
 import streamlit as st
 
-st.title("📄 → 📊 Compta automatique")
+st.title("📄 → 📊 Compta simple (fiable)")
 
-uploaded_files = st.file_uploader(
-    "Importer vos factures PDF",
-    type="pdf",
-    accept_multiple_files=True
-)
+uploaded_file = st.file_uploader("Importer une facture PDF", type="pdf")
 
 # -------- EXTRACTION TEXTE --------
-def extract_text_from_pdf(file):
+def extract_text(file):
     text = ""
     pdf = fitz.open(stream=file.read(), filetype="pdf")
     for page in pdf:
         text += page.get_text()
     return text
 
+if uploaded_file:
 
-# -------- EXTRACTION DONNÉES --------
-def extract_data(text):
+    text = extract_text(uploaded_file)
 
-    data = {}
-    text_clean = text.replace("\n", " ")
+    st.subheader("📄 Texte extrait (copie/colle ce dont tu as besoin)")
+    st.text_area("Texte du PDF", text, height=300)
 
-    # -------- DATE --------
-    date_match = re.search(r"[0-9]{1,2}[-/][0-9]{1,2}[-/][0-9]{2,4}", text_clean)
-    if date_match:
-        data["Date"] = pd.to_datetime(date_match.group(0), dayfirst=True).strftime("%Y-%m-%d")
-    else:
-        data["Date"] = ""
+    st.subheader("✏️ Saisie des informations")
 
-    # -------- NUMERO --------
-    num_match = re.search(r"facture\s*([0-9]+)", text_clean, re.IGNORECASE)
-    data["Numéro"] = num_match.group(1) if num_match else ""
+    col1, col2 = st.columns(2)
 
-    # -------- DETECTION FOURNISSEUR --------
-    is_kramp = "kramp" in text.lower()
+    with col1:
+        date = st.text_input("Date (YYYY-MM-DD)")
+        numero = st.text_input("Numéro facture")
+        nom = st.text_input("Nom client / fournisseur")
 
-    # ==============================
-    # 🔵 KRAMP
-    # ==============================
-    if is_kramp:
+    with col2:
+        ht = st.number_input("Montant HT", step=0.01)
+        tva = st.number_input("TVA", step=0.01)
+        ttc = st.number_input("TTC", step=0.01)
 
-        ht_match = re.search(r"Montant H\.T\.\s*([0-9]+[.,][0-9]{2})", text_clean)
-        ttc_match = re.search(r"Montant T\.T\.C\.\s*(?:EUR)?\s*([0-9]+[.,][0-9]{2})", text_clean)
+    fournisseur = st.text_input("Fournisseur")
+    type_op = st.selectbox("Type", ["Achat", "Vente"])
 
-        HT = float(ht_match.group(1).replace(",", ".")) if ht_match else 0
-        TTC = float(ttc_match.group(1).replace(",", ".")) if ttc_match else 0
-        TVA = round(TTC - HT, 2) if TTC else 0
+    if st.button("📥 Générer Excel"):
 
-    # ==============================
-    # 🟢 HYDRO
-    # ==============================
-    else:
+        data = [{
+            "Date": date,
+            "Numéro": numero,
+            "HT": ht,
+            "TVA": tva,
+            "TTC": ttc,
+            "Nom": nom,
+            "Fournisseur": fournisseur,
+            "Type": type_op
+        }]
 
-        montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
-
-        montants_float = sorted(
-            [float(m.replace(",", ".")) for m in montants],
-            reverse=True
-        )
-
-        if len(montants_float) >= 3:
-            TTC = montants_float[0]
-            TVA = montants_float[1]
-            HT = montants_float[2]
-        else:
-            HT = TVA = TTC = 0
-
-    # -------- AFFECTATION --------
-    data["HT"] = HT
-    data["TVA"] = TVA
-    data["TTC"] = TTC
-
-    # -------- NOM --------
-    lines = text.split("\n")
-    nom = ""
-
-    for i in range(len(lines)):
-        if "Client" in lines[i]:
-            if i + 1 < len(lines):
-                nom = lines[i + 1].strip()
-                break
-
-    if not nom:
-        for line in lines:
-            if line.strip().isupper() and len(line.strip()) > 5:
-                nom = line.strip()
-                break
-
-    data["Nom"] = nom
-
-    # -------- FOURNISSEUR --------
-    if is_kramp:
-        fournisseur = "KRAMP"
-    elif "laboutiquehydro" in text.lower():
-        fournisseur = "LA BOUTIQUE HYDRO"
-    else:
-        fournisseur = "Inconnu"
-
-    data["Fournisseur"] = fournisseur
-    data["Type"] = "Achat" if fournisseur != "LA BOUTIQUE HYDRO" else "Vente"
-
-    return data
-
-
-# -------- TRAITEMENT --------
-if uploaded_files:
-    if st.button("🚀 Générer"):
-
-        results = []
-
-        for file in uploaded_files:
-            text = extract_text_from_pdf(file)
-            results.append(extract_data(text))
-
-        df = pd.DataFrame(results)
+        df = pd.DataFrame(data)
 
         st.dataframe(df)
 
         with pd.ExcelWriter("compta.xlsx", engine="openpyxl") as writer:
-            df.to_excel(writer, sheet_name="Journal", index=False)
+            df.to_excel(writer, index=False)
 
         with open("compta.xlsx", "rb") as f:
             st.download_button("📥 Télécharger Excel", f, "compta.xlsx")
