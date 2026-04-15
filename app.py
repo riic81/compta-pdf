@@ -88,18 +88,16 @@ def extract_data(text):
     else:
         TTC = 0
 
-    # -------- MODE DE PAIEMENT (corrigé) --------
-    paiement = ""
+    # -------- MODE DE PAIEMENT (multi-pages corrigé) --------
+paiement = ""
 
-    for i in range(len(lines)):
-        if "Mode de paiement" in lines[i]:
-            if i + 1 < len(lines):
-                paiement = lines[i + 1].strip()
-                break
+for i in range(len(lines)):
+    if "Mode de paiement" in lines[i]:
+        if i + 1 < len(lines):
+            paiement = lines[i + 1].strip()
 
-    if not paiement:
-        paiement = "Inconnu"
-
+if not paiement:
+    paiement = "Inconnu"
     return {
         "Client": client,
         "Référence (numéro)": numero,
