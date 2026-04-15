@@ -26,8 +26,21 @@ def extract_data(text):
     text_clean = text.replace("\n", " ")
 
     # -------- CLIENT (FIABLE) --------
-    client_match = re.search(r"À l'attention de\s*(.+)", text_clean)
-    client = client_match.group(1).strip() if client_match else "Client inconnu"
+    lines = text.split("\n")
+    client = ""
+
+    for i in range(len(lines)):
+        if "Facture" in lines[i]:
+            for j in range(i+1, i+6):
+                if j < len(lines):
+                    line = lines[j].strip()
+                    if len(line) > 3 and "France" not in line:
+                        client = line
+                        break
+            break
+
+    if not client:
+        client = "Client inconnu"
 
     # -------- NUMERO --------
     num_match = re.search(r"Numéro de facture\s*([0-9]+)", text_clean)
@@ -51,19 +64,21 @@ def extract_data(text):
     else:
         date = ""
 
-    # -------- HT + TVA --------
-    tva_line = re.search(r"TVA.*", text)
+    # -------- HT (RÈGLE MÉTIER) --------
+    ht_match = re.search(r"20%\s*de\s*TVA\s*de\s*([0-9]+[.,][0-9]{2})", text_clean)
 
-    if tva_line:
-        numbers = re.findall(r"[0-9]+[.,][0-9]{2}", tva_line.group(0))
-
-        if len(numbers) >= 2:
-            HT = float(numbers[0].replace(",", "."))
-            TVA = float(numbers[1].replace(",", "."))
-        else:
-            HT = TVA = 0
+    if ht_match:
+        HT = float(ht_match.group(1).replace(",", "."))
     else:
-        HT = TVA = 0
+        HT = 0
+
+    # -------- TVA --------
+    tva_match = re.search(r"20%.*?([0-9]+[.,][0-9]{2})\s*$", text, re.MULTILINE)
+
+    if tva_match:
+        TVA = float(tva_match.group(1).replace(",", "."))
+    else:
+        TVA = 0
 
     # -------- TTC --------
     ttc_match = re.search(r"Montant total\s*([0-9]+[.,][0-9]{2})", text_clean)
