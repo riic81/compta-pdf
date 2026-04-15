@@ -25,17 +25,29 @@ def extract_data(text):
 
     text_clean = text.replace("\n", " ")
 
-    # CLIENT
-    client_match = re.search(r"À l'attention de\s*(.+)", text_clean)
-    client = client_match.group(1).strip() if client_match else "Client inconnu"
+    # CLIENT (fixe)
+    client = "Jean-Marc Lasserre"
 
     # NUMERO
     num_match = re.search(r"Numéro de facture\s*([0-9]+)", text_clean)
     numero = "F" + num_match.group(1) if num_match else ""
 
-    # DATE
-    date_match = re.search(r"[0-9]{1,2}\s+[a-zéû\.]+\s+[0-9]{4}", text_clean, re.IGNORECASE)
-    date = date_match.group(0) if date_match else ""
+    # DATE FACTURE → format propre
+    date_match = re.search(r"([0-9]{1,2})\s+([a-zéû\.]+)\s+([0-9]{4})", text_clean, re.IGNORECASE)
+
+    mois_map = {
+        "janv.": "01", "févr.": "02", "mars": "03", "avr.": "04",
+        "mai": "05", "juin": "06", "juil.": "07", "août": "08",
+        "sept.": "09", "oct.": "10", "nov.": "11", "déc.": "12"
+    }
+
+    if date_match:
+        jour = date_match.group(1)
+        mois = mois_map.get(date_match.group(2).lower(), "01")
+        annee = date_match.group(3)
+        date = f"{annee}-{mois}-{jour.zfill(2)}"
+    else:
+        date = ""
 
     # MONTANTS
     montants = re.findall(r"[0-9]+[.,][0-9]{2}", text_clean)
@@ -47,23 +59,16 @@ def extract_data(text):
     else:
         HT = TVA = TTC = 0
 
-    # TAUX TVA (fixe 20%)
-    taux_tva = 20
-
-    # TYPE DE VENTE (2 = vente standard)
-    type_vente = 2
-
     return {
         "Client": client,
         "Référence (numéro)": numero,
         "Date de paiement": date,
         "Moyen de paiement": "Virement",
         "Montant HT": HT,
-        "Taux de TVA": taux_tva,
+        "Taux de TVA": 20,
         "Montant TTC": TTC,
-        "Type de vente (1,2,3,4)": type_vente
+        "Type de vente (1,2,3,4)": 2
     }
-
 
 # -------- TRAITEMENT --------
 if uploaded_files:
